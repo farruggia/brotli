@@ -15,8 +15,8 @@
 #include <ctime>
 #include <string>
 
-#include "../dec/decode.h"
-#include "../enc/encode.h"
+#include <decode.h>
+#include <encode.h>
 
 
 static bool ParseQuality(const char* s, int* quality) {
