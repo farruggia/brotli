@@ -523,6 +523,7 @@ class HashLongestMatch {
                         const size_t cur_ix,
                         const size_t max_length,
                         const size_t max_backward,
+                        const bool   use_static_dictionary,
                         BackwardMatch* matches) {
     BackwardMatch* const orig_matches = matches;
     const size_t cur_ix_masked = cur_ix & ring_buffer_mask;
@@ -574,19 +575,21 @@ class HashLongestMatch {
     }
     buckets_[key][num_[key] & kBlockMask] = static_cast<uint32_t>(cur_ix);
     ++num_[key];
-    std::vector<uint32_t> dict_matches(kMaxDictionaryMatchLen + 1,
-                                       kInvalidMatch);
-    size_t minlen = std::max<size_t>(4, best_len + 1);
-    if (FindAllStaticDictionaryMatches(&data[cur_ix_masked], minlen, max_length,
-                                       &dict_matches[0])) {
-      size_t maxlen = std::min<size_t>(kMaxDictionaryMatchLen, max_length);
-      for (size_t l = minlen; l <= maxlen; ++l) {
-        uint32_t dict_id = dict_matches[l];
-        if (dict_id < kInvalidMatch) {
-          *matches++ = BackwardMatch(max_backward + (dict_id >> 5) + 1, l,
-                                     dict_id & 31);
+    if (use_static_dictionary) {
+      std::vector<uint32_t> dict_matches(kMaxDictionaryMatchLen + 1,
+                                         kInvalidMatch);
+      size_t minlen = std::max<size_t>(4, best_len + 1);
+      if (FindAllStaticDictionaryMatches(&data[cur_ix_masked], minlen, max_length,
+                                         &dict_matches[0])) {
+        size_t maxlen = std::min<size_t>(kMaxDictionaryMatchLen, max_length);
+        for (size_t l = minlen; l <= maxlen; ++l) {
+          uint32_t dict_id = dict_matches[l];
+          if (dict_id < kInvalidMatch) {
+            *matches++ = BackwardMatch(max_backward + (dict_id >> 5) + 1, l,
+                                       dict_id & 31);
+          }
         }
-      }
+      }      
     }
     return static_cast<size_t>(matches - orig_matches);
   }
@@ -677,6 +680,7 @@ class HashToBinaryTree {
                         const size_t cur_ix,
                         const size_t max_length,
                         const size_t max_backward,
+                        const bool   use_static_dictionary,
                         BackwardMatch* matches) {
     BackwardMatch* const orig_matches = matches;
     const size_t cur_ix_masked = cur_ix & ring_buffer_mask;
@@ -706,19 +710,22 @@ class HashToBinaryTree {
       matches = StoreAndFindMatches(data, cur_ix, ring_buffer_mask,
                                     max_length, &best_len, matches);
     }
-    std::vector<uint32_t> dict_matches(kMaxDictionaryMatchLen + 1,
-                                       kInvalidMatch);
-    size_t minlen = std::max<size_t>(4, best_len + 1);
-    if (FindAllStaticDictionaryMatches(&data[cur_ix_masked], minlen, max_length,
-                                       &dict_matches[0])) {
-      size_t maxlen = std::min<size_t>(kMaxDictionaryMatchLen, max_length);
-      for (size_t l = minlen; l <= maxlen; ++l) {
-        uint32_t dict_id = dict_matches[l];
-        if (dict_id < kInvalidMatch) {
-          *matches++ = BackwardMatch(max_backward + (dict_id >> 5) + 1, l,
-                                     dict_id & 31);
+
+    if (use_static_dictionary) {
+      std::vector<uint32_t> dict_matches(kMaxDictionaryMatchLen + 1,
+                                         kInvalidMatch);
+      size_t minlen = std::max<size_t>(4, best_len + 1);
+      if (FindAllStaticDictionaryMatches(&data[cur_ix_masked], minlen, max_length,
+                                         &dict_matches[0])) {
+        size_t maxlen = std::min<size_t>(kMaxDictionaryMatchLen, max_length);
+        for (size_t l = minlen; l <= maxlen; ++l) {
+          uint32_t dict_id = dict_matches[l];
+          if (dict_id < kInvalidMatch) {
+            *matches++ = BackwardMatch(max_backward + (dict_id >> 5) + 1, l,
+                                       dict_id & 31);
+          }
         }
-      }
+      }      
     }
     return static_cast<size_t>(matches - orig_matches);
   }

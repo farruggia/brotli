@@ -640,6 +640,7 @@ void CreateBackwardReferences(size_t num_bytes,
                               const int lgwin,
                               Hashers* hashers,
                               int hash_type,
+                              const bool use_static_dictionary,
                               int* dist_cache,
                               size_t* last_insert_len,
                               Command* commands,
@@ -670,7 +671,7 @@ void CreateBackwardReferences(size_t num_bytes,
         matches.resize(cur_match_pos + Hashers::H10::kMaxNumMatches);
       }
       size_t num_found_matches = hasher->FindAllMatches(
-          ringbuffer, ringbuffer_mask, position + i, max_length, max_distance,
+          ringbuffer, ringbuffer_mask, position + i, max_length, max_distance, use_static_dictionary,
           &matches[cur_match_pos]);
       const size_t cur_match_end = cur_match_pos + num_found_matches;
       for (size_t j = cur_match_pos; j + 1 < cur_match_end; ++j) {
