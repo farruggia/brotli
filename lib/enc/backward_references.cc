@@ -166,8 +166,9 @@ inline void SetDistanceCache(size_t distance,
 inline size_t ComputeDistanceCode(size_t distance,
                                   size_t max_distance,
                                   int quality,
-                                  const int* dist_cache) {
-  if (distance <= max_distance) {
+                                  const int* dist_cache,
+                                  const bool enable_relative) {
+  if (enable_relative and distance <= max_distance) {
     if (distance == static_cast<size_t>(dist_cache[0])) {
       return 0;
     } else if (distance == static_cast<size_t>(dist_cache[1])) {
@@ -312,6 +313,7 @@ void ZopfliIterate(size_t num_bytes,
                    size_t ringbuffer_mask,
                    const size_t max_backward_limit,
                    const ZopfliCostModel& model,
+                   const bool enable_relative,
                    const std::vector<uint32_t>& num_matches,
                    const std::vector<BackwardMatch>& matches,
                    int* dist_cache,
@@ -352,41 +354,42 @@ void ZopfliIterate(size_t num_bytes,
       // Look for last distance matches using the distance cache from this
       // starting position.
       size_t best_len = min_len - 1;
-      for (size_t j = 0; j < kNumDistanceShortCodes; ++j) {
-        const size_t idx = kDistanceCacheIndex[j];
-        const size_t backward =
-            static_cast<size_t>(dist_cache2[idx] + kDistanceCacheOffset[j]);
-        size_t prev_ix = cur_ix - backward;
-        if (prev_ix >= cur_ix) {
-          continue;
-        }
-        if (PREDICT_FALSE(backward > max_distance)) {
-          continue;
-        }
-        prev_ix &= ringbuffer_mask;
-
-        if (cur_ix_masked + best_len > ringbuffer_mask ||
-            prev_ix + best_len > ringbuffer_mask ||
-            ringbuffer[cur_ix_masked + best_len] !=
-            ringbuffer[prev_ix + best_len]) {
-          continue;
-        }
-        const size_t len =
-            FindMatchLengthWithLimit(&ringbuffer[prev_ix],
-                                     &ringbuffer[cur_ix_masked],
-                                     max_length);
-        for (size_t l = best_len + 1; l <= len; ++l) {
-          const size_t inslen = i - start;
-          double cmd_cost = model.GetCommandCost(j, l, inslen);
-          double cost = start_costdiff + cmd_cost + model.GetLiteralCosts(0, i);
-          if (cost < nodes[i + l].cost) {
-            UpdateZopfliNode(&nodes[0], i, start, l, l, backward, j,
-                             max_distance, dist_cache2, cost);
+      if (enable_relative) {
+        for (size_t j = 0; j < kNumDistanceShortCodes; ++j) {
+          const size_t idx = kDistanceCacheIndex[j];
+          const size_t backward =
+              static_cast<size_t>(dist_cache2[idx] + kDistanceCacheOffset[j]);
+          size_t prev_ix = cur_ix - backward;
+          if (prev_ix >= cur_ix) {
+            continue;
           }
-          best_len = l;
+          if (PREDICT_FALSE(backward > max_distance)) {
+            continue;
+          }
+          prev_ix &= ringbuffer_mask;
+  
+          if (cur_ix_masked + best_len > ringbuffer_mask ||
+              prev_ix + best_len > ringbuffer_mask ||
+              ringbuffer[cur_ix_masked + best_len] !=
+              ringbuffer[prev_ix + best_len]) {
+            continue;
+          }
+          const size_t len =
+              FindMatchLengthWithLimit(&ringbuffer[prev_ix],
+                                       &ringbuffer[cur_ix_masked],
+                                       max_length);
+          for (size_t l = best_len + 1; l <= len; ++l) {
+            const size_t inslen = i - start;
+            double cmd_cost = model.GetCommandCost(j, l, inslen);
+            double cost = start_costdiff + cmd_cost + model.GetLiteralCosts(0, i);
+            if (cost < nodes[i + l].cost) {
+              UpdateZopfliNode(&nodes[0], i, start, l, l, backward, j,
+                               max_distance, dist_cache2, cost);
+            }
+            best_len = l;
+          }
         }
       }
-
       // At higher iterations look only for new last distance matches, since
       // looking only for new command start positions with the same distances
       // does not help much.
@@ -488,6 +491,7 @@ void CreateBackwardReferences(size_t num_bytes,
                               size_t ringbuffer_mask,
                               const int quality,
                               const int lgwin,
+                              const bool enable_relative,
                               Hasher* hasher,
                               int* dist_cache,
                               size_t* last_insert_len,
@@ -538,7 +542,7 @@ void CreateBackwardReferences(size_t num_bytes,
     double best_score = kMinScore;
     bool match_found = hasher->FindLongestMatch(
         ringbuffer, ringbuffer_mask,
-        dist_cache, static_cast<uint32_t>(i + i_diff), max_length, max_distance,
+        dist_cache, static_cast<uint32_t>(i + i_diff), max_length, max_distance, enable_relative,
         &best_len, &best_len_code, &best_dist, &best_score);
     if (match_found) {
       // Found a match. Let's look for something even better ahead.
@@ -554,7 +558,7 @@ void CreateBackwardReferences(size_t num_bytes,
         match_found = hasher->FindLongestMatch(
             ringbuffer, ringbuffer_mask,
             dist_cache, static_cast<uint32_t>(i + i_diff + 1),
-            max_length, max_distance,
+            max_length, max_distance, enable_relative,
             &best_len_2, &best_len_code_2, &best_dist_2, &best_score_2);
         double cost_diff_lazy = 7.0;
         if (match_found && best_score_2 >= best_score + cost_diff_lazy) {
@@ -577,7 +581,7 @@ void CreateBackwardReferences(size_t num_bytes,
       max_distance = std::min(i + i_diff, max_backward_limit);
       // The first 16 codes are special shortcodes, and the minimum offset is 1.
       size_t distance_code =
-          ComputeDistanceCode(best_dist, max_distance, quality, dist_cache);
+          ComputeDistanceCode(best_dist, max_distance, quality, dist_cache, enable_relative);
       if (best_dist <= max_distance && distance_code > 0) {
         dist_cache[3] = dist_cache[2];
         dist_cache[2] = dist_cache[1];
@@ -640,6 +644,7 @@ void CreateBackwardReferences(size_t num_bytes,
                               const int lgwin,
                               Hashers* hashers,
                               int hash_type,
+                              const bool enable_relative,
                               const bool use_static_dictionary,
                               int* dist_cache,
                               size_t* last_insert_len,
@@ -721,7 +726,7 @@ void CreateBackwardReferences(size_t num_bytes,
       *last_insert_len = orig_last_insert_len;
       memcpy(dist_cache, orig_dist_cache, 4 * sizeof(dist_cache[0]));
       ZopfliIterate(num_bytes, position, ringbuffer, ringbuffer_mask,
-                    max_backward_limit, model, num_matches, matches, dist_cache,
+                    max_backward_limit, model, enable_relative, num_matches, matches, dist_cache,
                     last_insert_len, commands, num_commands, num_literals);
     }
     return;
@@ -731,49 +736,49 @@ void CreateBackwardReferences(size_t num_bytes,
     case 2:
       CreateBackwardReferences<Hashers::H2>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, hashers->hash_h2, dist_cache,
+          quality, lgwin, enable_relative, hashers->hash_h2, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 3:
       CreateBackwardReferences<Hashers::H3>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, hashers->hash_h3, dist_cache,
+          quality, lgwin, enable_relative, hashers->hash_h3, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 4:
       CreateBackwardReferences<Hashers::H4>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, hashers->hash_h4, dist_cache,
+          quality, lgwin, enable_relative, hashers->hash_h4, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 5:
       CreateBackwardReferences<Hashers::H5>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, hashers->hash_h5, dist_cache,
+          quality, lgwin, enable_relative, hashers->hash_h5, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 6:
       CreateBackwardReferences<Hashers::H6>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, hashers->hash_h6, dist_cache,
+          quality, lgwin, enable_relative, hashers->hash_h6, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 7:
       CreateBackwardReferences<Hashers::H7>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, hashers->hash_h7, dist_cache,
+          quality, lgwin, enable_relative, hashers->hash_h7, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 8:
       CreateBackwardReferences<Hashers::H8>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, hashers->hash_h8, dist_cache,
+          quality, lgwin, enable_relative, hashers->hash_h8, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 9:
       CreateBackwardReferences<Hashers::H9>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, hashers->hash_h9, dist_cache,
+          quality, lgwin, enable_relative, hashers->hash_h9, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     default:

@@ -32,6 +32,7 @@ struct BrotliParams {
         lgwin(22),
         lgblock(0),
         enable_dictionary(true),
+        enable_relative(true),
         enable_transforms(false),
         greedy_block_split(false),
         enable_context_modeling(true) {}
@@ -59,6 +60,7 @@ struct BrotliParams {
   // These settings are deprecated and will be ignored.
   // All speed vs. size compromises are controlled by the quality param.
   bool enable_dictionary;
+  bool enable_relative;
   bool enable_transforms;
   bool greedy_block_split;
   bool enable_context_modeling;

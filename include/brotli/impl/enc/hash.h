@@ -173,6 +173,7 @@ class HashLongestMatchQuickly {
                                const size_t cur_ix,
                                const size_t max_length,
                                const size_t max_backward,
+                               const bool   enable_relative,
                                size_t * __restrict best_len_out,
                                size_t * __restrict best_len_code_out,
                                size_t * __restrict best_distance_out,
@@ -186,25 +187,27 @@ class HashLongestMatchQuickly {
     size_t cached_backward = static_cast<size_t>(distance_cache[0]);
     size_t prev_ix = cur_ix - cached_backward;
     bool match_found = false;
-    if (prev_ix < cur_ix) {
-      prev_ix &= static_cast<uint32_t>(ring_buffer_mask);
-      if (compare_char == ring_buffer[prev_ix + best_len]) {
-        size_t len = FindMatchLengthWithLimit(&ring_buffer[prev_ix],
-                                              &ring_buffer[cur_ix_masked],
-                                              max_length);
-        if (len >= 4) {
-          best_score = BackwardReferenceScoreUsingLastDistance(len, 0);
-          best_len = len;
-          *best_len_out = len;
-          *best_len_code_out = len;
-          *best_distance_out = cached_backward;
-          *best_score_out = best_score;
-          compare_char = ring_buffer[cur_ix_masked + best_len];
-          if (kBucketSweep == 1) {
-            buckets_[key] = static_cast<uint32_t>(cur_ix);
-            return true;
-          } else {
-            match_found = true;
+    if (enable_relative) {
+      if (prev_ix < cur_ix) {
+        prev_ix &= static_cast<uint32_t>(ring_buffer_mask);
+        if (compare_char == ring_buffer[prev_ix + best_len]) {
+          size_t len = FindMatchLengthWithLimit(&ring_buffer[prev_ix],
+                                                &ring_buffer[cur_ix_masked],
+                                                max_length);
+          if (len >= 4) {
+            best_score = BackwardReferenceScoreUsingLastDistance(len, 0);
+            best_len = len;
+            *best_len_out = len;
+            *best_len_code_out = len;
+            *best_distance_out = cached_backward;
+            *best_score_out = best_score;
+            compare_char = ring_buffer[cur_ix_masked + best_len];
+            if (kBucketSweep == 1) {
+              buckets_[key] = static_cast<uint32_t>(cur_ix);
+              return true;
+            } else {
+              match_found = true;
+            }
           }
         }
       }
@@ -386,6 +389,7 @@ class HashLongestMatch {
                         const size_t cur_ix,
                         const size_t max_length,
                         const size_t max_backward,
+                        const bool   enable_relative,
                         size_t * __restrict best_len_out,
                         size_t * __restrict best_len_code_out,
                         size_t * __restrict best_distance_out,
@@ -398,40 +402,42 @@ class HashLongestMatch {
     size_t best_len = *best_len_out;
     *best_len_out = 0;
     // Try last distance first.
-    for (size_t i = 0; i < kNumLastDistancesToCheck; ++i) {
-      const size_t idx = kDistanceCacheIndex[i];
-      const size_t backward =
-          static_cast<size_t>(distance_cache[idx] + kDistanceCacheOffset[i]);
-      size_t prev_ix = static_cast<size_t>(cur_ix - backward);
-      if (prev_ix >= cur_ix) {
-        continue;
-      }
-      if (PREDICT_FALSE(backward > max_backward)) {
-        continue;
-      }
-      prev_ix &= ring_buffer_mask;
+    if (enable_relative) {
+      for (size_t i = 0; i < kNumLastDistancesToCheck; ++i) {
+        const size_t idx = kDistanceCacheIndex[i];
+        const size_t backward =
+            static_cast<size_t>(distance_cache[idx] + kDistanceCacheOffset[i]);
+        size_t prev_ix = static_cast<size_t>(cur_ix - backward);
+        if (prev_ix >= cur_ix) {
+          continue;
+        }
+        if (PREDICT_FALSE(backward > max_backward)) {
+          continue;
+        }
+        prev_ix &= ring_buffer_mask;
 
-      if (cur_ix_masked + best_len > ring_buffer_mask ||
-          prev_ix + best_len > ring_buffer_mask ||
-          data[cur_ix_masked + best_len] != data[prev_ix + best_len]) {
-        continue;
-      }
-      const size_t len = FindMatchLengthWithLimit(&data[prev_ix],
-                                                  &data[cur_ix_masked],
-                                                  max_length);
-      if (len >= 3 || (len == 2 && i < 2)) {
-        // Comparing for >= 2 does not change the semantics, but just saves for
-        // a few unnecessary binary logarithms in backward reference score,
-        // since we are not interested in such short matches.
-        double score = BackwardReferenceScoreUsingLastDistance(len, i);
-        if (best_score < score) {
-          best_score = score;
-          best_len = len;
-          *best_len_out = best_len;
-          *best_len_code_out = best_len;
-          *best_distance_out = backward;
-          *best_score_out = best_score;
-          match_found = true;
+        if (cur_ix_masked + best_len > ring_buffer_mask ||
+            prev_ix + best_len > ring_buffer_mask ||
+            data[cur_ix_masked + best_len] != data[prev_ix + best_len]) {
+          continue;
+        }
+        const size_t len = FindMatchLengthWithLimit(&data[prev_ix],
+                                                    &data[cur_ix_masked],
+                                                    max_length);
+        if (len >= 3 || (len == 2 && i < 2)) {
+          // Comparing for >= 2 does not change the semantics, but just saves for
+          // a few unnecessary binary logarithms in backward reference score,
+          // since we are not interested in such short matches.
+          double score = BackwardReferenceScoreUsingLastDistance(len, i);
+          if (best_score < score) {
+            best_score = score;
+            best_len = len;
+            *best_len_out = best_len;
+            *best_len_code_out = best_len;
+            *best_distance_out = backward;
+            *best_score_out = best_score;
+            match_found = true;
+          }
         }
       }
     }
