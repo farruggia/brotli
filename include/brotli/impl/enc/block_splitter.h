@@ -56,6 +56,18 @@ void SplitBlock(const Command* cmds,
                 BlockSplit* insert_and_copy_split,
                 BlockSplit* dist_split);
 
+void SplitBlock(const Command* cmds,
+                const size_t num_commands,
+                const uint8_t* data,
+                const size_t pos,
+                const size_t mask,
+                bool split_literal,
+                bool split_inscopy,
+                bool split_dist,
+                BlockSplit* literal_split,
+                BlockSplit* insert_and_copy_split,
+                BlockSplit* dist_split);
+
 }  // namespace brotli
 
 #endif  // BROTLI_ENC_BLOCK_SPLITTER_H_

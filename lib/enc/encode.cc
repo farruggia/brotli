@@ -606,15 +606,20 @@ void BrotliCompressor::WriteMetaBlockInternal(const bool is_last,
       if (params_.quality <= 9) {
         size_t num_literal_contexts = 1;
         const uint32_t* literal_context_map = NULL;
-        DecideOverLiteralContextModeling(data, WrapPosition(last_flush_pos_),
-                                         bytes, mask,
-                                         params_.quality,
-                                         &literal_context_mode,
-                                         &num_literal_contexts,
-                                         &literal_context_map);
+        if (params_.enable_context_modeling) {
+          DecideOverLiteralContextModeling(data, WrapPosition(last_flush_pos_),
+                                           bytes, mask,
+                                           params_.quality,
+                                           &literal_context_mode,
+                                           &num_literal_contexts,
+                                           &literal_context_map);          
+        }
         if (literal_context_map == NULL) {
           BuildMetaBlockGreedy(data, WrapPosition(last_flush_pos_), mask,
                                commands_, num_commands_,
+                               params_.enable_lit_part,
+                               params_.enable_len_part,
+                               params_.enable_dist_part,
                                &mb);
         } else {
           BuildMetaBlockGreedyWithContexts(data, WrapPosition(last_flush_pos_),
@@ -624,6 +629,9 @@ void BrotliCompressor::WriteMetaBlockInternal(const bool is_last,
                                            num_literal_contexts,
                                            literal_context_map,
                                            commands_, num_commands_,
+                                           params_.enable_lit_part,
+                                           params_.enable_len_part,
+                                           params_.enable_dist_part,
                                            &mb);
         }
       } else {
@@ -634,6 +642,11 @@ void BrotliCompressor::WriteMetaBlockInternal(const bool is_last,
         BuildMetaBlock(data, WrapPosition(last_flush_pos_), mask,
                        prev_byte_, prev_byte2_,
                        commands_, num_commands_,
+                       params_.enable_lit_part,
+                       params_.enable_len_part,
+                       params_.enable_dist_part,
+                       params_.enable_context_literal,
+                       params_.enable_context_distance,
                        literal_context_mode,
                        &mb);
       }

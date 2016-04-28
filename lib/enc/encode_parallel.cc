@@ -134,11 +134,19 @@ bool WriteMetaBlockParallel(const BrotliParams& params,
   if (params.quality <= 9) {
     BuildMetaBlockGreedy(&input[0], input_pos, mask,
                          commands, num_commands,
+                         params.enable_lit_part,
+                         params.enable_len_part,
+                         params.enable_dist_part,
                          &mb);
   } else {
     BuildMetaBlock(&input[0], input_pos, mask,
                    prev_byte, prev_byte2,
                    commands, num_commands,
+                   params.enable_lit_part,
+                   params.enable_len_part,
+                   params.enable_dist_part,
+                   params.enable_context_literal,
+                   params.enable_context_distance,
                    literal_context_mode,
                    &mb);
   }

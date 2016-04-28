@@ -25,19 +25,96 @@ void BuildMetaBlock(const uint8_t* ringbuffer,
                     size_t num_commands,
                     ContextType literal_context_mode,
                     MetaBlockSplit* mb) {
+  BuildMetaBlock(
+    ringbuffer, 
+    pos, 
+    mask, 
+    prev_byte, 
+    prev_byte2, 
+    cmds, 
+    num_commands, 
+    true, true, true, true, true,
+    literal_context_mode, 
+    mb
+  );
+}
+
+namespace {
+
+template <typename Histogram>
+std::vector<uint32_t> CollapseContexts(std::vector<Histogram> *hists, const size_t context_bits)
+{
+  auto &hist_ref      = *hists;
+  size_t context_mask = ~((1UL << context_bits) - 1U);
+
+  std::vector<uint32_t> hist_map(hist_ref.size(), 0UL);
+
+  for (auto i = 0UL; i < hist_ref.size(); ++i) {
+    auto i_map = i & context_mask;
+    auto &hist = hist_ref[i], &mapped_to = hist_ref[i_map];
+    if (hist.total_count_ > 0U) {
+      mapped_to.AddHistogram(hist);
+      hist.Clear();
+      hist_map[i] = i_map;
+    }
+  }
+  return hist_map;
+}
+
+template <typename Histogram>
+std::vector<uint32_t> IdentityContexts(std::vector<Histogram> *hists)
+{
+  std::vector<uint32_t> map(hists->size(), 0UL);
+  for (auto i = 0U; i < hists->size(); ++i) {
+    if ((*hists)[i].total_count_ > 0U){
+      map[i] = i;
+    }
+  }
+  return map;
+}
+
+std::vector<uint32_t> RemapContextMap(
+  const std::vector<uint32_t> &context_map,
+  const std::vector<uint32_t> &mapper
+)
+{
+  std::vector<uint32_t> remapped(mapper.size(), 0UL);
+  for (auto i = 0U; i < mapper.size(); ++i) {
+    remapped[i] = context_map[mapper[i]];
+  }
+  return remapped;
+}
+
+}
+
+void BuildMetaBlock(const uint8_t* ringbuffer,
+                    const size_t pos,
+                    const size_t mask,
+                    uint8_t prev_byte,
+                    uint8_t prev_byte2,
+                    const Command* cmds,
+                    size_t num_commands,
+                    bool enable_lit_split,
+                    bool enable_len_split,
+                    bool enable_dist_split,
+                    bool enable_context_literal,
+                    bool enable_context_distance,
+                    ContextType literal_context_mode,
+                    MetaBlockSplit* mb)
+{
+
   SplitBlock(cmds, num_commands,
              ringbuffer, pos, mask,
+             enable_lit_split, enable_len_split, enable_dist_split,
              &mb->literal_split,
              &mb->command_split,
-             &mb->distance_split);
+             &mb->distance_split);    
 
   std::vector<ContextType> literal_context_modes(mb->literal_split.num_types,
                                                  literal_context_mode);
 
-  size_t num_literal_contexts =
-      mb->literal_split.num_types << kLiteralContextBits;
-  size_t num_distance_contexts =
-      mb->distance_split.num_types << kDistanceContextBits;
+  size_t num_literal_contexts  = mb->literal_split.num_types  << kLiteralContextBits;
+  size_t num_distance_contexts = mb->distance_split.num_types << kDistanceContextBits;
   std::vector<HistogramLiteral> literal_histograms(num_literal_contexts);
   mb->command_histograms.resize(mb->command_split.num_types);
   std::vector<HistogramDistance> distance_histograms(num_distance_contexts);
@@ -55,35 +132,47 @@ void BuildMetaBlock(const uint8_t* ringbuffer,
                   &mb->command_histograms,
                   &distance_histograms);
 
+  // Maps for remapping contextes
+  auto lit_map  = enable_context_literal  ? IdentityContexts(&literal_histograms)  
+                                          : CollapseContexts(&literal_histograms,  kLiteralContextBits),
+       dist_map = enable_context_distance ? IdentityContexts(&distance_histograms) 
+                                          : CollapseContexts(&distance_histograms, kDistanceContextBits);
+
   // Histogram ids need to fit in one byte.
   static const size_t kMaxNumberOfHistograms = 256;
 
   ClusterHistograms(literal_histograms,
-                    1u << kLiteralContextBits,
+                    1U << kLiteralContextBits,
                     mb->literal_split.num_types,
                     kMaxNumberOfHistograms,
                     &mb->literal_histograms,
                     &mb->literal_context_map);
 
   ClusterHistograms(distance_histograms,
-                    1u << kDistanceContextBits,
+                    1U << kDistanceContextBits,
                     mb->distance_split.num_types,
                     kMaxNumberOfHistograms,
                     &mb->distance_histograms,
                     &mb->distance_context_map);
+
+  mb->distance_context_map = RemapContextMap(mb->distance_context_map, dist_map);
+  mb->literal_context_map  = RemapContextMap(mb->literal_context_map, lit_map);
 }
+
 
 // Greedy block splitter for one block category (literal, command or distance).
 template<typename HistogramType>
 class BlockSplitter {
  public:
-  BlockSplitter(size_t alphabet_size,
+  BlockSplitter(bool enable_partitioning,
+                size_t alphabet_size,
                 size_t min_block_size,
                 double split_threshold,
                 size_t num_symbols,
                 BlockSplit* split,
                 std::vector<HistogramType>* histograms)
-      : alphabet_size_(alphabet_size),
+      : enable_partitioning(enable_partitioning),
+        alphabet_size_(alphabet_size),
         min_block_size_(min_block_size),
         split_threshold_(split_threshold),
         num_blocks_(0),
@@ -108,7 +197,7 @@ class BlockSplitter {
   void AddSymbol(size_t symbol) {
     (*histograms_)[curr_histogram_ix_].Add(symbol);
     ++block_size_;
-    if (block_size_ == target_block_size_) {
+    if (enable_partitioning and (block_size_ == target_block_size_)) {
       FinishBlock(/* is_final = */ false);
     }
   }
@@ -132,7 +221,7 @@ class BlockSplitter {
       ++split_->num_types;
       ++curr_histogram_ix_;
       block_size_ = 0;
-    } else if (block_size_ > 0) {
+    } else if (enable_partitioning and (block_size_ > 0)) {
       double entropy = BitsEntropy(&(*histograms_)[curr_histogram_ix_].data_[0],
                                    alphabet_size_);
       HistogramType combined_histo[2];
@@ -201,6 +290,9 @@ class BlockSplitter {
  private:
   static const uint16_t kMaxBlockTypes = 256;
 
+  // Should we enable partitioning?
+  const bool enable_partitioning;
+
   // Alphabet size of particular block category.
   const size_t alphabet_size_;
   // We collect at least this many symbols for each block.
@@ -235,6 +327,9 @@ void BuildMetaBlockGreedy(const uint8_t* ringbuffer,
                           size_t mask,
                           const Command *commands,
                           size_t n_commands,
+                          bool enable_lit_split,
+                          bool enable_len_split,
+                          bool enable_dist_split,
                           MetaBlockSplit* mb) {
   size_t num_literals = 0;
   for (size_t i = 0; i < n_commands; ++i) {
@@ -242,14 +337,18 @@ void BuildMetaBlockGreedy(const uint8_t* ringbuffer,
   }
 
   BlockSplitter<HistogramLiteral> lit_blocks(
+      enable_lit_split,
       256, 512, 400.0, num_literals,
       &mb->literal_split, &mb->literal_histograms);
+
   BlockSplitter<HistogramCommand> cmd_blocks(
+      enable_len_split,
       kNumCommandPrefixes, 1024, 500.0, n_commands,
-      &mb->command_split, &mb->command_histograms);
+      &mb->command_split, &mb->command_histograms);    
   BlockSplitter<HistogramDistance> dist_blocks(
+      enable_dist_split,
       64, 512, 100.0, n_commands,
-      &mb->distance_split, &mb->distance_histograms);
+      &mb->distance_split, &mb->distance_histograms);    
 
   for (size_t i = 0; i < n_commands; ++i) {
     const Command cmd = commands[i];
@@ -274,14 +373,16 @@ void BuildMetaBlockGreedy(const uint8_t* ringbuffer,
 template<typename HistogramType>
 class ContextBlockSplitter {
  public:
-  ContextBlockSplitter(size_t alphabet_size,
+  ContextBlockSplitter(bool   enable_partitioning,
+                       size_t alphabet_size,
                        size_t num_contexts,
                        size_t min_block_size,
                        double split_threshold,
                        size_t num_symbols,
                        BlockSplit* split,
                        std::vector<HistogramType>* histograms)
-      : alphabet_size_(alphabet_size),
+      : enable_partitioning(enable_partitioning),
+        alphabet_size_(alphabet_size),
         num_contexts_(num_contexts),
         max_block_types_(kMaxBlockTypes / num_contexts),
         min_block_size_(min_block_size),
@@ -335,7 +436,7 @@ class ContextBlockSplitter {
       ++split_->num_types;
       curr_histogram_ix_ += num_contexts_;
       block_size_ = 0;
-    } else if (block_size_ > 0) {
+    } else if (enable_partitioning and (block_size_ > 0)) {
       // Try merging the set of histograms for the current block type with the
       // respective set of histograms for the last and second last block types.
       // Decide over the split based on the total reduction of entropy across
@@ -420,6 +521,8 @@ class ContextBlockSplitter {
  private:
   static const int kMaxBlockTypes = 256;
 
+  // Must we really perform partitioning?
+  const bool enable_partitioning;
   // Alphabet size of particular block category.
   const size_t alphabet_size_;
   const size_t num_contexts_;
@@ -461,6 +564,9 @@ void BuildMetaBlockGreedyWithContexts(const uint8_t* ringbuffer,
                                       const uint32_t* static_context_map,
                                       const Command *commands,
                                       size_t n_commands,
+                                      bool enable_lit_split,
+                                      bool enable_len_split,
+                                      bool enable_dist_split,
                                       MetaBlockSplit* mb) {
   size_t num_literals = 0;
   for (size_t i = 0; i < n_commands; ++i) {
@@ -468,12 +574,15 @@ void BuildMetaBlockGreedyWithContexts(const uint8_t* ringbuffer,
   }
 
   ContextBlockSplitter<HistogramLiteral> lit_blocks(
+      enable_lit_split,
       256, num_contexts, 512, 400.0, num_literals,
       &mb->literal_split, &mb->literal_histograms);
   BlockSplitter<HistogramCommand> cmd_blocks(
+      enable_len_split,
       kNumCommandPrefixes, 1024, 500.0, n_commands,
       &mb->command_split, &mb->command_histograms);
   BlockSplitter<HistogramDistance> dist_blocks(
+      enable_dist_split,
       64, 512, 100.0, n_commands,
       &mb->distance_split, &mb->distance_histograms);
 

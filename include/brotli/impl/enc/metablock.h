@@ -47,6 +47,22 @@ void BuildMetaBlock(const uint8_t* ringbuffer,
                     ContextType literal_context_mode,
                     MetaBlockSplit* mb);
 
+// As above, but allows to disable partitioning and context modeling.
+void BuildMetaBlock(const uint8_t* ringbuffer,
+                    const size_t pos,
+                    const size_t mask,
+                    uint8_t prev_byte,
+                    uint8_t prev_byte2,
+                    const Command* cmds,
+                    size_t num_commands,
+                    bool enable_lit_split,
+                    bool enable_len_split,
+                    bool enable_dist_split,
+                    bool enable_context_literal,
+                    bool enable_context_distance,                    
+                    ContextType literal_context_mode,
+                    MetaBlockSplit* mb);
+
 // Uses a fast greedy block splitter that tries to merge current block with the
 // last or the second last block and does not do any context modeling.
 void BuildMetaBlockGreedy(const uint8_t* ringbuffer,
@@ -54,6 +70,9 @@ void BuildMetaBlockGreedy(const uint8_t* ringbuffer,
                           size_t mask,
                           const Command *commands,
                           size_t n_commands,
+                          bool enable_lit_split,
+                          bool enable_len_split,
+                          bool enable_dist_split,
                           MetaBlockSplit* mb);
 
 // Uses a fast greedy block splitter that tries to merge current block with the
@@ -69,6 +88,9 @@ void BuildMetaBlockGreedyWithContexts(const uint8_t* ringbuffer,
                                       const uint32_t* static_context_map,
                                       const Command *commands,
                                       size_t n_commands,
+                                      bool enable_lit_split,
+                                      bool enable_len_split,
+                                      bool enable_dist_split,
                                       MetaBlockSplit* mb);
 
 void OptimizeHistograms(size_t num_direct_distance_codes,

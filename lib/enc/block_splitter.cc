@@ -358,6 +358,31 @@ void SplitBlock(const Command* cmds,
                 BlockSplit* literal_split,
                 BlockSplit* insert_and_copy_split,
                 BlockSplit* dist_split) {
+  SplitBlock(cmds, num_commands, data, pos, mask, true, true, true, literal_split, insert_and_copy_split, dist_split);
+}
+
+namespace {
+BlockSplit TrivialBlockSplit(size_t elements)
+{
+  BlockSplit split;
+  split.num_types = 1;
+  split.types.push_back(0);
+  split.lengths.push_back(elements);
+  return split;
+}  
+}
+
+void SplitBlock(const Command* cmds,
+                const size_t num_commands,
+                const uint8_t* data,
+                const size_t pos,
+                const size_t mask,
+                bool split_literal,
+                bool split_inscopy,
+                bool split_dist,
+                BlockSplit* literal_split,
+                BlockSplit* insert_and_copy_split,
+                BlockSplit* dist_split) {
   // Create a continuous array of literals.
   std::vector<uint8_t> literals;
   CopyLiteralsToByteArray(cmds, num_commands, data, pos, mask, &literals);
@@ -369,21 +394,38 @@ void SplitBlock(const Command* cmds,
                           &insert_and_copy_codes,
                           &distance_prefixes);
 
-  SplitByteVector<HistogramLiteral>(
-      literals,
-      kSymbolsPerLiteralHistogram, kMaxLiteralHistograms,
-      kLiteralStrideLength, kLiteralBlockSwitchCost,
-      literal_split);
-  SplitByteVector<HistogramCommand>(
-      insert_and_copy_codes,
-      kSymbolsPerCommandHistogram, kMaxCommandHistograms,
-      kCommandStrideLength, kCommandBlockSwitchCost,
-      insert_and_copy_split);
-  SplitByteVector<HistogramDistance>(
-      distance_prefixes,
-      kSymbolsPerDistanceHistogram, kMaxCommandHistograms,
-      kCommandStrideLength, kDistanceBlockSwitchCost,
-      dist_split);
+  if (split_literal) {
+    SplitByteVector<HistogramLiteral>(
+        literals,
+        kSymbolsPerLiteralHistogram, kMaxLiteralHistograms,
+        kLiteralStrideLength, kLiteralBlockSwitchCost,
+        literal_split);
+  } else {
+    *literal_split         = TrivialBlockSplit(literals.size());
+  }
+
+  if (split_inscopy) {
+    SplitByteVector<HistogramCommand>(
+        insert_and_copy_codes,
+        kSymbolsPerCommandHistogram, kMaxCommandHistograms,
+        kCommandStrideLength, kCommandBlockSwitchCost,
+        insert_and_copy_split);
+  } else {
+    *insert_and_copy_split = TrivialBlockSplit(insert_and_copy_codes.size());
+  }
+
+  if (split_dist) {
+    SplitByteVector<HistogramDistance>(
+        distance_prefixes,
+        kSymbolsPerDistanceHistogram, kMaxCommandHistograms,
+        kCommandStrideLength, kDistanceBlockSwitchCost,
+        dist_split);
+  } else {
+    *dist_split            = TrivialBlockSplit(distance_prefixes.size());
+  }
+
+
+
 }
 
 }  // namespace brotli
