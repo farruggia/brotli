@@ -606,7 +606,7 @@ void BrotliCompressor::WriteMetaBlockInternal(const bool is_last,
       if (params_.quality <= 9) {
         size_t num_literal_contexts = 1;
         const uint32_t* literal_context_map = NULL;
-        if (params_.enable_context_modeling) {
+        if (params_.enable_context_literal) {
           DecideOverLiteralContextModeling(data, WrapPosition(last_flush_pos_),
                                            bytes, mask,
                                            params_.quality,
