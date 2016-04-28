@@ -52,10 +52,10 @@ std::vector<uint32_t> CollapseContexts(std::vector<Histogram> *hists, const size
   for (auto i = 0UL; i < hist_ref.size(); ++i) {
     auto i_map = i & context_mask;
     auto &hist = hist_ref[i], &mapped_to = hist_ref[i_map];
-    if (hist.total_count_ > 0U) {
+    hist_map[i] = i_map;
+    if (i != i_map and hist.total_count_ > 0U) {
       mapped_to.AddHistogram(hist);
       hist.Clear();
-      hist_map[i] = i_map;
     }
   }
   return hist_map;
@@ -171,7 +171,7 @@ class BlockSplitter {
                 size_t num_symbols,
                 BlockSplit* split,
                 std::vector<HistogramType>* histograms)
-      : enable_partitioning(enable_partitioning),
+      : max_block_types(enable_partitioning ? kMaxBlockTypes : 1UL),
         alphabet_size_(alphabet_size),
         min_block_size_(min_block_size),
         split_threshold_(split_threshold),
@@ -197,7 +197,7 @@ class BlockSplitter {
   void AddSymbol(size_t symbol) {
     (*histograms_)[curr_histogram_ix_].Add(symbol);
     ++block_size_;
-    if (enable_partitioning and (block_size_ == target_block_size_)) {
+    if (block_size_ == target_block_size_) {
       FinishBlock(/* is_final = */ false);
     }
   }
@@ -221,7 +221,7 @@ class BlockSplitter {
       ++split_->num_types;
       ++curr_histogram_ix_;
       block_size_ = 0;
-    } else if (enable_partitioning and (block_size_ > 0)) {
+    } else if (block_size_ > 0) {
       double entropy = BitsEntropy(&(*histograms_)[curr_histogram_ix_].data_[0],
                                    alphabet_size_);
       HistogramType combined_histo[2];
@@ -236,7 +236,7 @@ class BlockSplitter {
         diff[j] = combined_entropy[j] - entropy - last_entropy_[j];
       }
 
-      if (split_->num_types < kMaxBlockTypes &&
+      if (split_->num_types < max_block_types &&
           diff[0] > split_threshold_ &&
           diff[1] > split_threshold_) {
         // Create new block.
@@ -290,9 +290,8 @@ class BlockSplitter {
  private:
   static const uint16_t kMaxBlockTypes = 256;
 
-  // Should we enable partitioning?
-  const bool enable_partitioning;
-
+  // Maximum number of block types (either 1 or kMaxBlockTypes)
+  const size_t max_block_types;
   // Alphabet size of particular block category.
   const size_t alphabet_size_;
   // We collect at least this many symbols for each block.
