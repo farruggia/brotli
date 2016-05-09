@@ -88,6 +88,9 @@ BrotliResult BrotliDecompressStream(size_t* available_in,
 void BrotliSetCustomDictionary(
     size_t size, const uint8_t* dict, BrotliState* s);
 
+extern int BrotliEnableStatsPrint;
+extern int BrotliEnableBenchPrint;
+
 
 #if defined(__cplusplus) || defined(c_plusplus)
 } /* extern "C" */
