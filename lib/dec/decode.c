@@ -1847,7 +1847,9 @@ int context_is_trivial(uint8_t *context_map, size_t context_bits, size_t block_t
 
 void print_stats(BrotliState *s)
 {
-
+  if (s->is_uncompressed) {
+    return;
+  }
   int literal_ctx_trivial           = context_is_trivial(s->context_map, kLiteralContextBits, s->num_block_types[0]);
   int distance_ctx_trivial          = context_is_trivial(s->dist_context_map, kDistanceContextBits, s->num_block_types[2]);
   sum_static_dictionary_references += static_dictionary_references;
