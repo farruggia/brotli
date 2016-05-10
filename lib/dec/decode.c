@@ -82,27 +82,15 @@ static const uint8_t kCodeLengthPrefixValue[16] = {
 
 // DEBUG: performance counts
 static size_t metablock_id                     = 0UL;
+static size_t metablock_empty                  = 1UL;
 static size_t static_dictionary_references     = 0UL;
 static size_t relative_distance_references     = 0UL;
 static size_t lit_block_switch_count           = 0UL;
 static size_t len_block_switch_count           = 0UL;
 static size_t dst_block_switch_count           = 0UL;
 int BrotliEnableStatsPrint                     = 0UL;
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-static size_t sum_static_dictionary_references = 0UL;
-static size_t sum_relative_distance_references = 0UL;
-static size_t sum_lit_block_switch_count       = 0UL;
-static size_t sum_len_block_switch_count       = 0UL;
-static size_t sum_dst_block_switch_count       = 0UL;
-static size_t max_lit_trees                    = 0UL;
-static size_t max_len_trees                    = 0UL;
-static size_t max_dst_trees                    = 0UL;
-static size_t max_lit_block_types              = 0UL;
-static size_t max_len_block_types              = 0UL;
-static size_t max_dst_block_types              = 0UL;
-static size_t literal_context_enabled          = 0UL;
-static size_t distance_context_enabled         = 0UL;
 int BrotliEnableBenchPrint                     = 0UL;
+
 BrotliState* BrotliCreateState(
     brotli_alloc_func alloc_func, brotli_free_func free_func, void* opaque) {
   BrotliState* state = 0;
@@ -1847,66 +1835,54 @@ int context_is_trivial(uint8_t *context_map, size_t context_bits, size_t block_t
 
 void print_stats(BrotliState *s)
 {
-  if (s->is_uncompressed) {
+  if (s->is_uncompressed || metablock_empty) {
     return;
   }
   int literal_ctx_trivial           = context_is_trivial(s->context_map, kLiteralContextBits, s->num_block_types[0]);
   int distance_ctx_trivial          = context_is_trivial(s->dist_context_map, kDistanceContextBits, s->num_block_types[2]);
-  sum_static_dictionary_references += static_dictionary_references;
-  sum_relative_distance_references += relative_distance_references;
-  sum_lit_block_switch_count       += lit_block_switch_count;
-  sum_len_block_switch_count       += len_block_switch_count;
-  sum_dst_block_switch_count       += dst_block_switch_count;
-  max_lit_trees                     = MAX(max_lit_trees, s->literal_hgroup.num_htrees);
-  max_len_trees                     = MAX(max_len_trees, s->insert_copy_hgroup.num_htrees);
-  max_dst_trees                     = MAX(max_dst_trees, s->distance_hgroup.num_htrees);
-  max_lit_block_types               = MAX(max_lit_block_types, s->num_block_types[0]);
-  max_len_block_types               = MAX(max_len_block_types, s->num_block_types[1]);
-  max_dst_block_types               = MAX(max_dst_block_types, s->num_block_types[2]);
-  literal_context_enabled           = MAX(!literal_ctx_trivial, literal_context_enabled);
-  distance_context_enabled          = MAX(!distance_ctx_trivial, literal_context_enabled);
 
-  if (!BrotliEnableStatsPrint) {
-    return;
+  if (BrotliEnableStatsPrint) {
+    fprintf(stderr, "** Metablock           \t%lu\n", metablock_id);
+    fprintf(stderr, "== DictionaryReferences\t%lu\n", static_dictionary_references);
+    fprintf(stderr, "== RelativeReferences  \t%lu\n", relative_distance_references);
+    fprintf(stderr, "--\n");
+    fprintf(stderr, "== LitBlockTypes       \t%d\n", s->num_block_types[0]);
+    fprintf(stderr, "== LenBlockTypes       \t%d\n", s->num_block_types[1]);
+    fprintf(stderr, "== DstBlockTypes       \t%d\n", s->num_block_types[2]);
+    fprintf(stderr, "--\n");
+  
+    fprintf(stderr, "== LitHuffmanTrees     \t%d\n", s->literal_hgroup.num_htrees);
+    fprintf(stderr, "== LenHuffmanTrees     \t%d\n", s->insert_copy_hgroup.num_htrees);
+    fprintf(stderr, "== DistHuffmanTrees    \t%d\n", s->distance_hgroup.num_htrees);
+    fprintf(stderr, "--\n");
+    fprintf(stderr, "== LitBlockSwitches    \t%lu\n", lit_block_switch_count);
+    fprintf(stderr, "== LenBlockSwitches    \t%lu\n", len_block_switch_count);
+    fprintf(stderr, "== DstBlockSwitches    \t%lu\n", dst_block_switch_count);
+    fprintf(stderr, "--\n");
+    fprintf(stderr, "== LiteralContext      \t%s\n", literal_ctx_trivial ? "False" : "True");
+    fprintf(stderr, "== DistanceContext     \t%s\n", distance_ctx_trivial ? "False" : "True"
+    );
+    fprintf(stderr, "--\n");
+    fprintf(stderr, "== TrivialLitContext   \t%s\n",  s->trivial_literal_context ? "True" : "False");
   }
-  ++metablock_id;
-  fprintf(stderr, "** Metablock           \t%lu\n", metablock_id);
-  fprintf(stderr, "== DictionaryReferences\t%lu\n", static_dictionary_references);
-  fprintf(stderr, "== RelativeReferences  \t%lu\n", relative_distance_references);
-  fprintf(stderr, "--\n");
-  fprintf(stderr, "== LitBlockTypes       \t%d\n", s->num_block_types[0]);
-  fprintf(stderr, "== LenBlockTypes       \t%d\n", s->num_block_types[1]);
-  fprintf(stderr, "== DstBlockTypes       \t%d\n", s->num_block_types[2]);
-  fprintf(stderr, "--\n");
 
-
-
-  fprintf(stderr, "== LitHuffmanTrees     \t%d\n", s->literal_hgroup.num_htrees);
-  fprintf(stderr, "== LenHuffmanTrees     \t%d\n", s->insert_copy_hgroup.num_htrees);
-  fprintf(stderr, "== DistHuffmanTrees    \t%d\n", s->distance_hgroup.num_htrees);
-  fprintf(stderr, "--\n");
-  fprintf(stderr, "== LitBlockSwitches    \t%lu\n", lit_block_switch_count);
-  fprintf(stderr, "== LenBlockSwitches    \t%lu\n", len_block_switch_count);
-  fprintf(stderr, "== DstBlockSwitches    \t%lu\n", dst_block_switch_count);
-  fprintf(stderr, "--\n");
-  fprintf(stderr, "== LiteralContext      \t%s\n", literal_ctx_trivial ? "False" : "True");
-  fprintf(stderr, "== DistanceContext     \t%s\n", distance_ctx_trivial ? "False" : "True"
-  );
-  fprintf(stderr, "--\n");
-  fprintf(stderr, "== TrivialLitContext   \t%s\n",  s->trivial_literal_context ? "True" : "False");
-}
-
-void print_bench_stats()
-{
   if (BrotliEnableBenchPrint) {
-    fprintf(stderr,"%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
-      sum_static_dictionary_references, sum_relative_distance_references,
-      max_lit_block_types, max_len_block_types, max_dst_block_types,
-      max_lit_trees, max_len_trees, max_dst_trees,
-      sum_lit_block_switch_count, sum_len_block_switch_count, sum_dst_block_switch_count,
-      literal_context_enabled, distance_context_enabled
+    fprintf(stderr,"%lu,%lu,%lu,%d,%d,%d,%d,%d,%d,%lu,%lu,%lu,%d,%d\n",
+      metablock_id,
+      static_dictionary_references, relative_distance_references,
+      s->num_block_types[0], s->num_block_types[1], s->num_block_types[2],
+      s->literal_hgroup.num_htrees, s->insert_copy_hgroup.num_htrees, s->distance_hgroup.num_htrees,
+      lit_block_switch_count, len_block_switch_count, dst_block_switch_count,
+      !literal_ctx_trivial, !distance_ctx_trivial
     );    
   }
+  
+  ++metablock_id;
+  static_dictionary_references = 0UL;
+  relative_distance_references = 0UL;
+  lit_block_switch_count       = 0UL;
+  len_block_switch_count       = 0UL;
+  dst_block_switch_count       = 0UL;
 }
 
 BrotliResult BrotliDecompressBuffer(size_t encoded_size,
@@ -1923,7 +1899,6 @@ BrotliResult BrotliDecompressBuffer(size_t encoded_size,
   BrotliStateInit(&s);
   result = BrotliDecompressStream(&available_in, &next_in, &available_out,
       &next_out, &total_out, &s);
-  print_bench_stats();
   *decoded_size = total_out;
   BrotliStateCleanup(&s);
   if (result != BROTLI_RESULT_SUCCESS) {
@@ -2055,6 +2030,7 @@ BrotliResult BrotliDecompressStream(size_t* available_in,
         s->state = BROTLI_STATE_METABLOCK_BEGIN;
         /* No break, continue to next state */
       case BROTLI_STATE_METABLOCK_BEGIN:
+        metablock_empty = 1UL;
         BrotliStateMetablockBegin(s);
         BROTLI_LOG_UINT(s->pos);
         s->state = BROTLI_STATE_METABLOCK_HEADER;
@@ -2082,6 +2058,7 @@ BrotliResult BrotliDecompressStream(size_t* available_in,
           s->state = BROTLI_STATE_METABLOCK_DONE;
           break;
         }
+        metablock_empty = 0UL;
         if (!s->ringbuffer) {
           BrotliCalculateRingBufferSize(s, br);
         }
@@ -2341,7 +2318,6 @@ BrotliResult BrotliDecompressStream(size_t* available_in,
         return result;
     }
   }
-  print_stats(s);
   return result;
 }
 
