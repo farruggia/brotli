@@ -492,6 +492,7 @@ void CreateBackwardReferences(size_t num_bytes,
                               const int quality,
                               const int lgwin,
                               const bool enable_relative,
+                              const bool enable_dictionary,
                               Hasher* hasher,
                               int* dist_cache,
                               size_t* last_insert_len,
@@ -542,7 +543,7 @@ void CreateBackwardReferences(size_t num_bytes,
     double best_score = kMinScore;
     bool match_found = hasher->FindLongestMatch(
         ringbuffer, ringbuffer_mask,
-        dist_cache, static_cast<uint32_t>(i + i_diff), max_length, max_distance, enable_relative,
+        dist_cache, static_cast<uint32_t>(i + i_diff), max_length, max_distance, enable_relative, enable_dictionary,
         &best_len, &best_len_code, &best_dist, &best_score);
     if (match_found) {
       // Found a match. Let's look for something even better ahead.
@@ -558,7 +559,7 @@ void CreateBackwardReferences(size_t num_bytes,
         match_found = hasher->FindLongestMatch(
             ringbuffer, ringbuffer_mask,
             dist_cache, static_cast<uint32_t>(i + i_diff + 1),
-            max_length, max_distance, enable_relative,
+            max_length, max_distance, enable_relative, enable_dictionary,
             &best_len_2, &best_len_code_2, &best_dist_2, &best_score_2);
         double cost_diff_lazy = 7.0;
         if (match_found && best_score_2 >= best_score + cost_diff_lazy) {
@@ -736,49 +737,49 @@ void CreateBackwardReferences(size_t num_bytes,
     case 2:
       CreateBackwardReferences<Hashers::H2>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, enable_relative, hashers->hash_h2, dist_cache,
+          quality, lgwin, enable_relative, use_static_dictionary, hashers->hash_h2, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 3:
       CreateBackwardReferences<Hashers::H3>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, enable_relative, hashers->hash_h3, dist_cache,
+          quality, lgwin, enable_relative, use_static_dictionary, hashers->hash_h3, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 4:
       CreateBackwardReferences<Hashers::H4>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, enable_relative, hashers->hash_h4, dist_cache,
+          quality, lgwin, enable_relative, use_static_dictionary, hashers->hash_h4, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 5:
       CreateBackwardReferences<Hashers::H5>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, enable_relative, hashers->hash_h5, dist_cache,
+          quality, lgwin, enable_relative, use_static_dictionary, hashers->hash_h5, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 6:
       CreateBackwardReferences<Hashers::H6>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, enable_relative, hashers->hash_h6, dist_cache,
+          quality, lgwin, enable_relative, use_static_dictionary, hashers->hash_h6, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 7:
       CreateBackwardReferences<Hashers::H7>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, enable_relative, hashers->hash_h7, dist_cache,
+          quality, lgwin, enable_relative, use_static_dictionary, hashers->hash_h7, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 8:
       CreateBackwardReferences<Hashers::H8>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, enable_relative, hashers->hash_h8, dist_cache,
+          quality, lgwin, enable_relative, use_static_dictionary, hashers->hash_h8, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     case 9:
       CreateBackwardReferences<Hashers::H9>(
           num_bytes, position, is_last, ringbuffer, ringbuffer_mask,
-          quality, lgwin, enable_relative, hashers->hash_h9, dist_cache,
+          quality, lgwin, enable_relative, use_static_dictionary, hashers->hash_h9, dist_cache,
           last_insert_len, commands, num_commands, num_literals);
       break;
     default:

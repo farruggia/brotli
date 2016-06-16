@@ -174,6 +174,7 @@ class HashLongestMatchQuickly {
                                const size_t max_length,
                                const size_t max_backward,
                                const bool   enable_relative,
+                               const bool   enable_dictionary,
                                size_t * __restrict best_len_out,
                                size_t * __restrict best_len_code_out,
                                size_t * __restrict best_distance_out,
@@ -264,7 +265,7 @@ class HashLongestMatchQuickly {
         }
       }
     }
-    if (kUseDictionary && !match_found &&
+    if (kUseDictionary && enable_dictionary && !match_found &&
         num_dict_matches_ >= (num_dict_lookups_ >> 7)) {
       ++num_dict_lookups_;
       const uint32_t dict_key = Hash<14>(&ring_buffer[cur_ix_masked]) << 1;
@@ -390,6 +391,7 @@ class HashLongestMatch {
                         const size_t max_length,
                         const size_t max_backward,
                         const bool   enable_relative,
+                        const bool   enable_dictionary,
                         size_t * __restrict best_len_out,
                         size_t * __restrict best_len_code_out,
                         size_t * __restrict best_distance_out,
@@ -478,7 +480,7 @@ class HashLongestMatch {
     }
     buckets_[key][num_[key] & kBlockMask] = static_cast<uint32_t>(cur_ix);
     ++num_[key];
-    if (!match_found && num_dict_matches_ >= (num_dict_lookups_ >> 7)) {
+    if (!match_found && enable_dictionary && num_dict_matches_ >= (num_dict_lookups_ >> 7)) {
       size_t dict_key = Hash<14>(&data[cur_ix_masked]) << 1;
       for (int k = 0; k < 2; ++k, ++dict_key) {
         ++num_dict_lookups_;
