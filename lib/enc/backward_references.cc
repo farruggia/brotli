@@ -6,15 +6,15 @@
 
 // Function to find backward reference copies.
 
-#include <impl/enc/backward_references.h>
-
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 #include <impl/enc/command.h>
 #include <impl/enc/fast_log.h>
 #include <impl/enc/literal_cost.h>
+#include <encode.h>
 
 namespace brotli {
 
@@ -483,6 +483,7 @@ void ZopfliIterate(size_t num_bytes,
   *num_commands += static_cast<size_t>(commands - orig_commands);
 }
 
+#if 0
 template<typename Hasher>
 void CreateBackwardReferences(size_t num_bytes,
                               size_t position,
@@ -635,6 +636,7 @@ void CreateBackwardReferences(size_t num_bytes,
   *last_insert_len = insert_length;
   *num_commands += static_cast<size_t>(commands - orig_commands);
 }
+#endif
 
 void CreateBackwardReferences(size_t num_bytes,
                               size_t position,
@@ -642,11 +644,10 @@ void CreateBackwardReferences(size_t num_bytes,
                               const uint8_t* ringbuffer,
                               size_t ringbuffer_mask,
                               const int quality,
-                              const int lgwin,
-                              Hashers* hashers,
+                              ext::matcher *matcher,
                               int hash_type,
-                              const bool enable_relative,
-                              const bool use_static_dictionary,
+                              bool enable_relative,
+                              bool use_static_dictionary,
                               int* dist_cache,
                               size_t* last_insert_len,
                               Command* commands,
@@ -654,6 +655,7 @@ void CreateBackwardReferences(size_t num_bytes,
                               size_t* num_literals) {
   bool zopflify = quality > 9;
   if (zopflify) {
+    // From here...
     Hashers::H10* hasher = hashers->hash_h10;
     hasher->Init(lgwin, position, num_bytes, is_last);
     if (num_bytes >= 3 && position >= kMaxTreeCompLength) {
@@ -704,6 +706,7 @@ void CreateBackwardReferences(size_t num_bytes,
         }
       }
     }
+    // ...to here.
     size_t orig_num_literals = *num_literals;
     size_t orig_last_insert_len = *last_insert_len;
     int orig_dist_cache[4] = {
@@ -733,6 +736,8 @@ void CreateBackwardReferences(size_t num_bytes,
     return;
   }
 
+  throw std::logic_error("Not implemented yet");
+#if 0
   switch (hash_type) {
     case 2:
       CreateBackwardReferences<Hashers::H2>(
@@ -785,6 +790,7 @@ void CreateBackwardReferences(size_t num_bytes,
     default:
       break;
   }
+#endif
 }
 
 }  // namespace brotli

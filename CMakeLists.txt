@@ -9,7 +9,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 option(BRO_TOOLS "Build tools")
 
 # C++11 support, Release by default
-include(Cpp11)
+include(Cpp14)
 include(NinjaColorFix)
 include(ReleaseDefault)
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")

@@ -25,11 +25,32 @@ static const int kMinWindowBits = 10;
 static const int kMinInputBlockBits = 16;
 static const int kMaxInputBlockBits = 24;
 
+namespace ext {
+
+class matcher {
+  const unsigned int lgwin_;
+  unsigned int sanitize_lgwin(unsigned int win)
+  {
+    if (win < kMinWindowBits) {
+      return kMinWindowBits;
+    } else if (win > kMaxWindowBits) {
+      return kMaxWindowBits;
+    }
+    return win;  
+  }
+public:
+  matcher(unsigned int lgwin) : lgwin_(sanitize_lgwin(lgwin))  { }
+  unsigned int lgwin() { return lgwin_; }
+  virtual ~matcher() { }
+};
+  
+}
+
 struct BrotliParams {
   BrotliParams()
       : mode(MODE_GENERIC),
         quality(11),
-        lgwin(22),
+        matcher(nullptr),
         lgblock(0),
         enable_dictionary(true),
         enable_relative(true),
@@ -52,7 +73,7 @@ struct BrotliParams {
   // the quality, the slower the compression. Range is 0 to 11.
   int quality;
   // Base 2 logarithm of the sliding window size. Range is 10 to 24.
-  int lgwin;
+  ext::matcher *matcher;
   // Base 2 logarithm of the maximum input block size. Range is 16 to 24.
   // If set to 0, the value will be set based on the quality.
   int lgblock;

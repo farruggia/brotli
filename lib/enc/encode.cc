@@ -181,7 +181,6 @@ void InitCommandPrefixCodes(uint8_t cmd_depths[128],
 
 BrotliCompressor::BrotliCompressor(BrotliParams params)
     : params_(params),
-      hashers_(new Hashers()),
       input_pos_(0),
       num_commands_(0),
       num_literals_(0),
@@ -198,19 +197,14 @@ BrotliCompressor::BrotliCompressor(BrotliParams params)
       literal_buf_(NULL) {
   // Sanitize params.
   params_.quality = std::max(0, params_.quality);
-  if (params_.lgwin < kMinWindowBits) {
-    params_.lgwin = kMinWindowBits;
-  } else if (params_.lgwin > kMaxWindowBits) {
-    params_.lgwin = kMaxWindowBits;
-  }
   if (params_.quality <= 1) {
-    params_.lgblock = params_.lgwin;
+    params_.lgblock = params_.matcher->lgwin();
   } else if (params_.quality < kMinQualityForBlockSplit) {
     params_.lgblock = 14;
   } else if (params_.lgblock == 0) {
     params_.lgblock = 16;
-    if (params_.quality >= 9 && params_.lgwin > params_.lgblock) {
-      params_.lgblock = std::min(21, params_.lgwin);
+    if (params_.quality >= 9 && params_.matcher->lgwin() > params_.lgblock) {
+      params_.lgblock = std::min<unsigned int>(21, params_.matcher->lgwin());
     }
   } else {
     params_.lgblock = std::min(kMaxInputBlockBits,
@@ -222,14 +216,17 @@ BrotliCompressor::BrotliCompressor(BrotliParams params)
   // added block fits there completely and we still get lgwin bits and at least
   // read_block_size_bits + 1 bits because the copy tail length needs to be
   // smaller than ringbuffer size.
-  int ringbuffer_bits = std::max(params_.lgwin + 1, params_.lgblock + 1);
+  int ringbuffer_bits = std::max<int>(
+    params_.matcher->lgwin() + 1,
+    params_.lgblock + 1
+  );
   ringbuffer_ = new RingBuffer(ringbuffer_bits, params_.lgblock);
 
   commands_ = 0;
   cmd_alloc_size_ = 0;
 
   // Initialize last byte with stream header.
-  EncodeWindowBits(params_.lgwin, &last_byte_, &last_byte_bits_);
+  EncodeWindowBits(params_.matcher->lgwin(), &last_byte_, &last_byte_bits_);
 
   // Initialize distance cache.
   dist_cache_[0] = 4;
@@ -247,17 +244,12 @@ BrotliCompressor::BrotliCompressor(BrotliParams params)
     command_buf_ = new uint32_t[kCompressFragmentTwoPassBlockSize];
     literal_buf_ = new uint8_t[kCompressFragmentTwoPassBlockSize];
   }
-
-  // Initialize hashers.
-  hash_type_ = std::min(10, params_.quality);
-  hashers_->Init(hash_type_);
 }
 
 BrotliCompressor::~BrotliCompressor() {
   delete[] storage_;
   free(commands_);
   delete ringbuffer_;
-  delete hashers_;
   delete[] large_table_;
   delete[] command_buf_;
   delete[] literal_buf_;
@@ -316,6 +308,8 @@ void BrotliCompressor::CopyInputToRingBuffer(const size_t input_size,
 
 void BrotliCompressor::BrotliSetCustomDictionary(
     const size_t size, const uint8_t* dict) {
+  throw std::logic_error("Not implemented yet");
+#if 0
   CopyInputToRingBuffer(size, dict);
   last_flush_pos_ = size;
   last_processed_pos_ = size;
@@ -326,6 +320,7 @@ void BrotliCompressor::BrotliSetCustomDictionary(
     prev_byte2_ = dict[size - 2];
   }
   hashers_->PrependCustomDictionary(hash_type_, params_.lgwin, size, dict);
+#endif
 }
 
 bool BrotliCompressor::WriteBrotliData(const bool is_last,
@@ -342,6 +337,8 @@ bool BrotliCompressor::WriteBrotliData(const bool is_last,
   const uint32_t bytes = static_cast<uint32_t>(delta);
 
   if (params_.quality <= 1) {
+    throw std::logic_error("Not implemented yet");
+#if 0
     if (delta == 0 && !is_last) {
       // We have no new input data and we don't have to finish the stream, so
       // nothing to do.
@@ -376,6 +373,7 @@ bool BrotliCompressor::WriteBrotliData(const bool is_last,
     *output = &storage[0];
     *out_size = storage_ix >> 3;
     return true;
+#endif
   }
 
   // Theoretical max number of commands is 1 per 2 bytes.
@@ -392,8 +390,7 @@ bool BrotliCompressor::WriteBrotliData(const bool is_last,
   CreateBackwardReferences(bytes, WrapPosition(last_processed_pos_),
                            is_last, data, mask,
                            params_.quality,
-                           params_.lgwin,
-                           hashers_,
+                           params_.matcher,
                            hash_type_,
                            params_.enable_relative,
                            params_.enable_dictionary,
@@ -866,6 +863,8 @@ int BrotliCompressWithCustomDictionary(size_t dictsize, const uint8_t* dict,
                                        BrotliParams params,
                                        BrotliIn* in, BrotliOut* out) {
   if (params.quality <= 1) {
+    throw std::logic_error("Not refactored yet");
+#if 0
     const int quality = std::max(0, params.quality);
     const int lgwin = std::min(kMaxWindowBits,
                                std::max(kMinWindowBits, params.lgwin));
@@ -943,6 +942,7 @@ int BrotliCompressWithCustomDictionary(size_t dictsize, const uint8_t* dict,
     delete[] command_buf;
     delete[] literal_buf;
     return ok;
+#endif
   }
 
   size_t in_bytes = 0;
