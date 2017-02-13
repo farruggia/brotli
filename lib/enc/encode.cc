@@ -24,14 +24,14 @@
 #include <impl/enc/compress_fragment_two_pass.h>
 #include <impl/enc/entropy_encode.h>
 #include <impl/enc/fast_log.h>
-#include <impl/enc/hash.h>
 #include <impl/enc/histogram.h>
 #include <impl/enc/prefix.h>
 #include <impl/enc/utf8_util.h>
 #include <impl/enc/write_bits.h>
 
 namespace brotli {
-
+static const int kMinInputBlockBits = 16;
+static const int kMaxInputBlockBits = 24;
 static const int kMinQualityForBlockSplit = 4;
 static const int kMinQualityForContextModeling = 5;
 static const int kMinQualityForOptimizeHistograms = 4;

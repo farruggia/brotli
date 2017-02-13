@@ -9,10 +9,10 @@
 #ifndef BROTLI_ENC_BACKWARD_REFERENCES_H_
 #define BROTLI_ENC_BACKWARD_REFERENCES_H_
 
-#include "./hash.h"
+#include "../../encode.h"
+
 #include "./command.h"
 #include "../types.h"
-
 namespace brotli {
 
 // "commands" points to the next output command to write to, "*num_commands" is

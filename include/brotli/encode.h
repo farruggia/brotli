@@ -10,9 +10,9 @@
 #define BROTLI_ENC_ENCODE_H_
 
 #include <string>
+#include <tuple>
 #include <vector>
 #include "impl/enc/command.h"
-#include "impl/enc/hash.h"
 #include "impl/enc/ringbuffer.h"
 #include "impl/enc/static_dict.h"
 #include "impl/enc/streams.h"
@@ -22,8 +22,30 @@ namespace brotli {
 
 static const int kMaxWindowBits = 24;
 static const int kMinWindowBits = 10;
-static const int kMinInputBlockBits = 16;
-static const int kMaxInputBlockBits = 24;
+
+struct BackwardMatch {
+  BackwardMatch() : distance(0), length_and_code(0) {}
+
+  BackwardMatch(size_t dist, size_t len)
+      : distance(static_cast<uint32_t>(dist))
+      , length_and_code(static_cast<uint32_t>(len << 5)) {}
+
+  BackwardMatch(size_t dist, size_t len, size_t len_code)
+      : distance(static_cast<uint32_t>(dist))
+      , length_and_code(static_cast<uint32_t>(
+            (len << 5) | (len == len_code ? 0 : len_code))) {}
+
+  size_t length() const {
+    return length_and_code >> 5;
+  }
+  size_t length_code() const {
+    size_t code = length_and_code & 31;
+    return code ? code : length();
+  }
+
+  uint32_t distance;
+  uint32_t length_and_code;
+};
 
 namespace ext {
 
@@ -41,6 +63,10 @@ class matcher {
 public:
   matcher(unsigned int lgwin) : lgwin_(sanitize_lgwin(lgwin))  { }
   unsigned int lgwin() { return lgwin_; }
+
+  virtual std::tuple<std::vector<BackwardMatch>, std::vector<uint32_t>>
+  operator()(std::size_t position, std::size_t num_bytes, bool is_last) = 0;
+
   virtual ~matcher() { }
 };
   
@@ -173,7 +199,6 @@ class BrotliCompressor {
                               uint8_t** output);
 
   BrotliParams params_;
-  Hashers* hashers_;
   int hash_type_;
   uint64_t input_pos_;
   RingBuffer* ringbuffer_;

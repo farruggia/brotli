@@ -41,7 +41,6 @@ add_library(libbrotli
   lib/enc/entropy_encode.cc 
   lib/enc/compress_fragment.cc 
   lib/enc/literal_cost.cc 
-  lib/enc/encode_parallel.cc
 )
 
 if (BRO_TOOLS)

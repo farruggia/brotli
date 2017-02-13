@@ -656,57 +656,15 @@ void CreateBackwardReferences(size_t num_bytes,
   bool zopflify = quality > 9;
   if (zopflify) {
     // From here...
-    Hashers::H10* hasher = hashers->hash_h10;
-    hasher->Init(lgwin, position, num_bytes, is_last);
-    if (num_bytes >= 3 && position >= kMaxTreeCompLength) {
-      // Store the last `kMaxTreeCompLength - 1` positions in the hasher.
-      // These could not be calculated before, since they require knowledge
-      // of both the previous and the current block.
-      for (size_t i = position - kMaxTreeCompLength + 1; i < position; ++i) {
-        hasher->Store(ringbuffer, ringbuffer_mask, i, num_bytes + position - i);
-      }
-    }
+    // matcher->
     // Set maximum distance, see section 9.1. of the spec.
+    auto lgwin = matcher->lgwin();
     const size_t max_backward_limit = (1 << lgwin) - 16;
-    std::vector<uint32_t> num_matches(num_bytes);
-    std::vector<BackwardMatch> matches(4 * num_bytes);
-    size_t cur_match_pos = 0;
-    for (size_t i = 0; i + 3 < num_bytes; ++i) {
-      size_t max_distance = std::min(position + i, max_backward_limit);
-      size_t max_length = num_bytes - i;
-      // Ensure that we have enough free slots.
-      if (matches.size() < cur_match_pos + Hashers::H10::kMaxNumMatches) {
-        matches.resize(cur_match_pos + Hashers::H10::kMaxNumMatches);
-      }
-      size_t num_found_matches = hasher->FindAllMatches(
-          ringbuffer, ringbuffer_mask, position + i, max_length, max_distance, use_static_dictionary,
-          &matches[cur_match_pos]);
-      const size_t cur_match_end = cur_match_pos + num_found_matches;
-      for (size_t j = cur_match_pos; j + 1 < cur_match_end; ++j) {
-        assert(matches[j].length() < matches[j + 1].length());
-        assert(matches[j].distance > max_distance ||
-               matches[j].distance <= matches[j + 1].distance);
-      }
-      num_matches[i] = static_cast<uint32_t>(num_found_matches);
-      if (num_found_matches > 0) {
-        const size_t match_len = matches[cur_match_end - 1].length();
-        if (match_len > kMaxZopfliLen) {
-          matches[cur_match_pos++] = matches[cur_match_end - 1];
-          num_matches[i] = 1;
-          for (size_t j = 1; j < match_len; ++j) {
-            ++i;
-            if (match_len - j < 64) {
-              hasher->Store(ringbuffer, ringbuffer_mask, position + i,
-                            num_bytes - i);
-            }
-            num_matches[i] = 0;
-          }
-        } else {
-          cur_match_pos = cur_match_end;
-        }
-      }
-    }
+    // FIXME: to tie later
+    std::vector<uint32_t> num_matches;
+    std::vector<BackwardMatch> matches;
     // ...to here.
+    std::tie(matches, num_matches) = (*matcher)(position, num_bytes, is_last);
     size_t orig_num_literals = *num_literals;
     size_t orig_last_insert_len = *last_insert_len;
     int orig_dist_cache[4] = {
