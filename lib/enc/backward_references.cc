@@ -16,6 +16,8 @@
 #include <impl/enc/fast_log.h>
 #include <impl/enc/literal_cost.h>
 
+#include <iostream>
+
 namespace brotli {
 
 // The maximum length for which the zopflification uses distinct distances.
@@ -704,6 +706,34 @@ void CreateBackwardReferences(size_t num_bytes,
         }
       }
     }
+
+    {
+      // Print matches here
+      std::cerr << "POS = " << position << ", L = " << num_bytes << std::endl;
+      auto pos    = position;
+      auto num_it = num_matches.begin();
+      auto mat_it = matches.begin();
+      for (; num_it != num_matches.end(); ++num_it, ++pos) {
+        auto num = *num_it;
+        if (num > 0) {
+          auto mat_end = mat_it + num;
+          for (; mat_it != mat_end; ++mat_it) {
+            std::cout << pos << " <- "
+                      << pos - mat_it->distance << " @ "
+                      << mat_it->length() 
+                      << " (D = " << mat_it->distance << ")"
+                      << std::endl;        
+          }
+          auto max_len = std::prev(mat_end)->length();
+          if (max_len >= kMaxZopfliLen) {
+            pos += max_len - 1;
+						num_it += max_len - 1;
+          }
+        }
+      }      
+    }
+
+
     size_t orig_num_literals = *num_literals;
     size_t orig_last_insert_len = *last_insert_len;
     int orig_dist_cache[4] = {
